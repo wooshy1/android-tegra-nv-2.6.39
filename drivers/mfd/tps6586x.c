@@ -311,13 +311,8 @@ static int tps6586x_gpio_output(struct gpio_chip *gc, unsigned offset,
 {
 	struct tps6586x *tps6586x = container_of(gc, struct tps6586x, gpio);
 	uint8_t val, mask;
-	int ret;
 
-	val = value << offset;
-	mask = 0x1 << offset;
-	ret = tps6586x_update(tps6586x->dev, TPS6586X_GPIOSET2, val, mask);
-	if (ret)
-		return ret;
+	tps6586x_gpio_set(gc, offset, value);
 
 	val = 0x1 << (offset * 2);
 	mask = 0x3 << (offset * 2);
@@ -327,6 +322,8 @@ static int tps6586x_gpio_output(struct gpio_chip *gc, unsigned offset,
 
 static int tps6586x_gpio_init(struct tps6586x *tps6586x, int gpio_base)
 {
+	int ret;
+
 	if (!gpio_base)
 		return 0;
 
@@ -342,7 +339,10 @@ static int tps6586x_gpio_init(struct tps6586x *tps6586x, int gpio_base)
 	tps6586x->gpio.set		= tps6586x_gpio_set;
 	tps6586x->gpio.get		= tps6586x_gpio_get;
 
-	return gpiochip_add(&tps6586x->gpio);
+	ret = gpiochip_add(&tps6586x->gpio);
+	if (ret)
+		dev_warn(tps6586x->dev, "GPIO registration failed: %d\n", ret);
+	return ret;
 }
 
 static int __remove_subdev(struct device *dev, void *unused)

@@ -113,3 +113,25 @@ config SND_SOC_TEGRA_MAX98088
 	  Say Y or M here if you want to add support for SoC audio on Tegra
 	  boards using the MAX98088 codec. Currently, only supported board is
 	  Enterprise.
+
+config MACH_HAS_SND_SOC_TEGRA_ALC5624
+	bool
+	help
+	  Machines that use the SND_SOC_TEGRA_ALC5624 driver should select
+	  this config option, in order to allow the user to enable
+	  SND_SOC_TEGRA_ALC5624.
+
+config SND_SOC_TEGRA_ALC5624
+	tristate "SoC Audio support for Shuttle based (P10AN01) Tablet PCs"
+	depends on SND_SOC_TEGRA && MACH_SHUTTLE && I2C
+	default m
+	depends on MACH_HAS_SND_SOC_TEGRA_ALC5624
+	select SND_SOC_TEGRA20_I2S if ARCH_TEGRA_2x_SOC
+	select SND_SOC_TEGRA30_I2S if ARCH_TEGRA_3x_SOC
+	select SND_SOC_TEGRA20_SPDIF if ARCH_TEGRA_2x_SOC
+	select SND_SOC_TEGRA30_SPDIF if ARCH_TEGRA_3x_SOC
+	select SND_SOC_ALC5624
+	select SND_SOC_SPDIF
+	help
+	  Say Y or M here if you want to add support for SoC audio on the
+	  Shuttle (P10AN01) Tablet PCs. 

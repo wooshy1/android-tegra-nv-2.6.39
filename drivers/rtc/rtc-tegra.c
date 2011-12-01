@@ -60,8 +60,13 @@ struct tegra_rtc_info {
 	struct rtc_device	*rtc_dev;
 	void __iomem		*rtc_base; /* NULL if not initialized. */
 	int			tegra_rtc_irq; /* alarm and periodic irq */
+#ifdef CONFIG_RTC_TEGRA2_BACKUP_RTC
+	bool rtc_set; /* RTC does not contain current date */
+#endif
 	spinlock_t		tegra_rtc_lock;
 };
+
+static int tegra_rtc_set_time(struct device *dev, struct rtc_time *tm);
 
 /* RTC hardware is busy when it is updating its values over AHB once
  * every eight 32kHz clocks (~250uS).
@@ -109,6 +114,28 @@ static int tegra_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	struct tegra_rtc_info *info = dev_get_drvdata(dev);
 	unsigned long sec, msec;
 	unsigned long sl_irq_flags;
+
+#ifdef CONFIG_RTC_TEGRA2_BACKUP_RTC
+	/* If the tegra2 clock is unable to keep time when SoC is shutdown, and
+	   they gave us a backup RTC, use it to init the Tegra2 RTC SoC */
+	if (!info->rtc_set) 
+	{
+		struct rtc_device* rtcbak = rtc_class_open(CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		if (rtcbak != NULL) {
+			struct rtc_time tmbak;
+			if (rtc_read_time(rtcbak,&tmbak) == 0) {
+				/* We got the time from the auxiliary RTC - Store it into Tegra2 RTC */
+				tegra_rtc_set_time(dev,&tmbak);
+				info->rtc_set = true;
+			} else {
+				dev_err(dev,"Unable to read date from backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+			}
+			rtc_class_close(rtcbak);
+		} else {
+			dev_err(dev,"Unable to open backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		}
+	}
+#endif
 
 	/* RTC hardware copies seconds to shadow seconds when a read
 	 * of milliseconds occurs. use a lock to keep other threads out. */
@@ -164,6 +191,22 @@ static int tegra_rtc_set_time(struct device *dev, struct rtc_time *tm)
 
 	dev_vdbg(dev, "time read back as %d\n",
 		readl(info->rtc_base + TEGRA_RTC_REG_SECONDS));
+
+#ifdef CONFIG_RTC_TEGRA2_BACKUP_RTC
+	/* If the tegra2 clock is unable to keep time when SoC is shutdown, and
+	   they gave us a backup RTC, also store the time in that RTC */
+	{
+		struct rtc_device* rtcbak = rtc_class_open(CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		if (rtcbak != NULL) {
+			if (rtc_set_time(rtcbak,tm) < 0) {
+				dev_err(dev,"Unable to set date to backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+			}
+			rtc_class_close(rtcbak);
+		} else {
+			dev_err(dev,"Unable to open backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		}
+	}
+#endif
 
 	return ret;
 }
@@ -352,6 +395,26 @@ static int __devinit tegra_rtc_probe(struct platform_device *pdev)
 	writel(0, info->rtc_base + TEGRA_RTC_REG_SECONDS_ALARM0);
 	writel(0xffffffff, info->rtc_base + TEGRA_RTC_REG_INTR_STATUS);
 	writel(0, info->rtc_base + TEGRA_RTC_REG_INTR_MASK);
+#ifdef CONFIG_RTC_TEGRA2_BACKUP_RTC
+	/* If the tegra2 clock is unable to keep time when SoC is shutdown, and
+	   they gave us a backup RTC, use it to init the Tegra2 RTC SoC */
+	{
+		struct rtc_device* rtcbak = rtc_class_open(CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		if (rtcbak != NULL) {
+			struct rtc_time tm;
+			if (rtc_read_time(rtcbak,&tm) == 0) {
+				/* We got the time from the auxiliary RTC - Store it into Tegra2 RTC */
+				tegra_rtc_set_time(&pdev->dev,&tm);
+				info->rtc_set = true;
+			} else {
+				dev_err(&pdev->dev,"Unable to read date from backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+			}
+			rtc_class_close(rtcbak);
+		} else {
+			dev_err(&pdev->dev,"Unable to open backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		}
+	}
+#endif
 
 	device_init_wakeup(&pdev->dev, 1);
 

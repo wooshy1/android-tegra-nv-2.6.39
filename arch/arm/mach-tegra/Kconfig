@@ -65,6 +65,14 @@ config MACH_HARMONY
        help
          Support for NVIDIA Harmony development platform
 
+config MACH_SHUTTLE
+       bool "Shuttle (P10AN01) TabletPC"
+	   depends on ARCH_TEGRA_2x_SOC
+	   select MACH_HAS_SND_SOC_TEGRA_ALC5624 if SND_SOC
+       help
+         Support for all TabletPCs based on the P10AN01 design,
+	     including Shuttle, Advent Vega, POV Mobii, Surfer 360.
+
 config MACH_VENTANA
        bool "Ventana board"
        depends on ARCH_TEGRA_2x_SOC
