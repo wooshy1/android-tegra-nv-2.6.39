@@ -357,8 +357,10 @@ static int eGalax_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
-static int eGalax_ts_suspend(struct i2c_client *client, pm_message_t mesg)
+#if defined(CONFIG_PM) || defined(CONFIG_HAS_EARLYSUSPEND)
+static int eGalax_ts_suspend(struct device *dev)
 {
+	struct i2c_client *client = to_i2c_client(dev);
 	// Power down command
 	unsigned char cmdbuf[MAX_I2C_LEN]={0x03, 0x05, 0x0A, 0x03, 0x36, 0x3F, 0x02, 0, 0, 0};
 	
@@ -381,8 +383,9 @@ static int eGalax_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 }
 
 
-static int eGalax_ts_resume(struct i2c_client *client)
+static int eGalax_ts_resume(struct device *dev)
 {
+	struct i2c_client *client = to_i2c_client(dev);
 	unsigned char buf[MAX_I2C_LEN]={0};
 	int ret=0, i, gpio;	
 	struct eGalax_ts_data *ts = i2c_get_clientdata(client);
@@ -415,20 +418,28 @@ static int eGalax_ts_resume(struct i2c_client *client)
 	
 	return 0;
 }
+#endif
+
+#ifdef CONFIG_PM
+static const struct dev_pm_ops eGalax_pm_ops = {
+	.suspend	= eGalax_ts_suspend,
+	.resume		= eGalax_ts_resume,
+};
+#endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void eGalax_ts_early_suspend(struct early_suspend *h)
 {
 	struct eGalax_ts_data *ts;
 	ts = container_of(h, struct eGalax_ts_data, early_suspend);
-	eGalax_ts_suspend(ts->client, PMSG_SUSPEND);
+	eGalax_ts_suspend(&ts->client->dev);
 }
 
 static void eGalax_ts_late_resume(struct early_suspend *h)
 {
 	struct eGalax_ts_data *ts;
 	ts = container_of(h, struct eGalax_ts_data, early_suspend);
-	eGalax_ts_resume(ts->client);
+	eGalax_ts_resume(&ts->client->dev);
 }
 #endif
 
@@ -441,13 +452,12 @@ static struct i2c_driver eGalax_ts_driver = {
 	.driver = {
 		.name	= "egalax",
 		.owner  = THIS_MODULE,
+#if !defined(CONFIG_HAS_EARLYSUSPEND) && defined(CONFIG_PM)
+		.pm 	= &eGalax_pm_ops,
+#endif
 	},
 	.probe		= eGalax_ts_probe,
 	.remove		= eGalax_ts_remove,
-#ifndef CONFIG_HAS_EARLYSUSPEND	
-	.suspend	= eGalax_ts_suspend,
-	.resume		= eGalax_ts_resume,
-#endif
 	.id_table	= eGalax_ts_id,
 };
 

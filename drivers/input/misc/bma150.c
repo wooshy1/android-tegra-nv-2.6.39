@@ -2414,22 +2414,31 @@ static int __devexit bma150_remove(struct i2c_client *client)
 	return 0;
 }
 
-static int bma150_resume(struct i2c_client *client)
+#ifdef CONFIG_PM
+static int bma150_resume(struct device *dev)
 {
+	struct i2c_client *client = to_i2c_client(dev);
 	struct bma150ctx *ctx = i2c_get_clientdata(client);
 	if (!ctx->enabled_b4_suspend)
 		return 0;
 	return bma150_enable(ctx);
 }
 
-static int bma150_suspend(struct i2c_client *client, pm_message_t mesg)
+static int bma150_suspend(struct device *dev)
 {
+	struct i2c_client *client = to_i2c_client(dev);
 	struct bma150ctx *ctx = i2c_get_clientdata(client);
 	ctx->enabled_b4_suspend = atomic_read(&ctx->open_cnt);
 	if (!ctx->enabled_b4_suspend)
 		return 0;
 	return bma150_disable(ctx);
 }
+
+static const struct dev_pm_ops bma150_pm_ops = {
+	.suspend	= bma150_suspend,
+	.resume		= bma150_resume,
+};
+#endif
 
 static const struct i2c_device_id bma150_id[] = {
 	{"bma150", 0},
@@ -2442,11 +2451,12 @@ static struct i2c_driver bma150_driver = {
 	.driver = {
 		   .owner = THIS_MODULE,
 		   .name = "bma150",
+#ifdef CONFIG_PM
+			.pm = &bma150_pm_ops,
+#endif
 		   },
 	.probe = bma150_probe,
 	.remove = __devexit_p(bma150_remove),
-	.resume = bma150_resume,
-	.suspend = bma150_suspend,
 	.id_table = bma150_id,
 };
 

@@ -310,9 +310,6 @@ static int __init get_cfg_from_tags(void)
 		tegra_bootloader_fb_size  = NvBootArgs.MemHandleArgs[NvBootArgs.FramebufferArgs.MemHandleKey - ATAG_NVIDIA_PRESERVED_MEM_0].Size;
 		
 		pr_info("Nvidia TAG: framebuffer: %lu @ 0x%08lx\n",tegra_bootloader_fb_size,tegra_bootloader_fb_start);
-		
-		/* Unfortunately, the kernel locks up if we enable this */
-		tegra_bootloader_fb_start = tegra_bootloader_fb_size = 0;
 	}
 	
 	/* If the LP0 vector is found, use it */

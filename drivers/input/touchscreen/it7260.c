@@ -1442,9 +1442,11 @@ static int it7260_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
-static int it7260_ts_suspend(struct i2c_client *client, pm_message_t mesg)
+#if defined(CONFIG_PM) || defined(CONFIG_HAS_EARLYSUSPEND)
+static int it7260_ts_suspend(struct device *dev)
 {
 	int ret;
+	struct i2c_client *client = to_i2c_client(dev);
 	struct it7260_ts_data *ts = i2c_get_clientdata(client);
 	if (ts->use_irq)
 		disable_irq(client->irq);
@@ -1470,9 +1472,9 @@ static int it7260_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	return 0;
 }
 
-
-static int it7260_ts_resume(struct i2c_client *client)
+static int it7260_ts_resume(struct device *dev)
 {
+	struct i2c_client *client = to_i2c_client(dev);
 	struct it7260_ts_data *ts = i2c_get_clientdata(client);
 
 	// Enable the touchpad
@@ -1494,20 +1496,28 @@ static int it7260_ts_resume(struct i2c_client *client)
 
 	return 0;
 }
+#endif
+
+#ifdef CONFIG_PM
+static const struct dev_pm_ops it7260_pm_ops = {
+	.suspend	= it7260_ts_suspend,
+	.resume		= it7260_ts_resume,
+};
+#endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void it7260_ts_early_suspend(struct early_suspend *h)
 {
 	struct it7260_ts_data *ts;
 	ts = container_of(h, struct it7260_ts_data, early_suspend);
-	it7260_ts_suspend(ts->client, PMSG_SUSPEND);
+	it7260_ts_suspend(&ts->client->dev);
 }
 
 static void it7260_ts_late_resume(struct early_suspend *h)
 {
 	struct it7260_ts_data *ts;
 	ts = container_of(h, struct it7260_ts_data, early_suspend);
-	it7260_ts_resume(ts->client);
+	it7260_ts_resume(&ts->client->dev);
 }
 #endif
 
@@ -1521,13 +1531,12 @@ static struct i2c_driver it7260_ts_driver = {
 	.driver = {
 		.name	= "it7260",
 		.owner  = THIS_MODULE,
+#if !defined(CONFIG_HAS_EARLYSUSPEND) && defined(CONFIG_PM)
+		.pm 	= &it7260_pm_ops,
+#endif
 	},
 	.probe		= it7260_ts_probe,
 	.remove		= it7260_ts_remove,
-#ifndef CONFIG_HAS_EARLYSUSPEND
-	.suspend	= it7260_ts_suspend,
-	.resume		= it7260_ts_resume,
-#endif
 	.id_table	= it7260_ts_id,
 };
 

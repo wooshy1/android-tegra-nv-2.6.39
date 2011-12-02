@@ -104,7 +104,7 @@ static inline int tegra_enable_latency_scaling(enum tegra_la_id id,
 
 static inline void tegra_disable_latency_scaling(enum tegra_la_id id)
 {
-	return 0;
+	return;
 }
 #else
 int tegra_set_latency_allowance(enum tegra_la_id id,

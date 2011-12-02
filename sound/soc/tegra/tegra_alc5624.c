@@ -16,7 +16,7 @@
  *
  */
  
-/* #define DEBUG */
+#define DEBUG
 
 /* Shuttle uses MIC2 as the mic input */
  
@@ -701,26 +701,18 @@ static int tegra_codec_init(struct snd_soc_pcm_runtime *rtd)
 	/* Store the GPIO used to detect headphone */
 	tegra_jack_gpios[0].gpio = ctx->gpio_hp_det;
 
-	/* make sure to register the dapm widgets */
-	snd_soc_dapm_new_widgets(dapm);
-				
-	/* Set endpoints to not connected */
-	snd_soc_dapm_nc_pin(dapm, "LINEL");
-	snd_soc_dapm_nc_pin(dapm, "LINER");
-	snd_soc_dapm_nc_pin(dapm, "PHONEIN");
-	snd_soc_dapm_nc_pin(dapm, "MIC1");
-	snd_soc_dapm_nc_pin(dapm, "MONO");
-
-	/* Set endpoints to default off mode */
-	snd_soc_dapm_enable_pin(dapm, "Internal Speaker");
-	snd_soc_dapm_enable_pin(dapm, "Internal Mic");
-	snd_soc_dapm_disable_pin(dapm, "Headphone Jack");
-
-	ret = snd_soc_dapm_sync(dapm);
-	if (ret) {
-		dev_err(card->dev,"Failed to sync\n");
+#ifdef SHUTTLE_MANUAL_CONTROL_OF_OUTPUTDEVICE	
+	ret = snd_soc_add_controls(codec, tegra_controls,
+				   ARRAY_SIZE(tegra_controls));
+	if (ret < 0)
 		return ret;
-	}
+#endif
+
+	snd_soc_dapm_new_controls(dapm, tegra_dapm_widgets,
+					ARRAY_SIZE(tegra_dapm_widgets));
+
+	snd_soc_dapm_add_routes(dapm, audio_map,
+					ARRAY_SIZE(audio_map));
 
 	/* Headphone jack detection */		
 	ret = snd_soc_jack_new(codec, "Headphone Jack", SND_JACK_HEADPHONE,
@@ -738,16 +730,33 @@ static int tegra_codec_init(struct snd_soc_pcm_runtime *rtd)
 				&tegra_alc5624_jack_detect_nb);
 #endif
 
-	snd_soc_dapm_force_enable_pin(dapm, "Mic Bias2");		
-			  
 	ret = snd_soc_jack_add_gpios(&ctx->tegra_jack,
 			   ARRAY_SIZE(tegra_jack_gpios),
 			   tegra_jack_gpios);
 	if (ret)
 		return ret;
 
-	snd_soc_dapm_sync(dapm);
-		
+
+	/* Set endpoints to not connected */
+	snd_soc_dapm_nc_pin(dapm, "LINEL");
+	snd_soc_dapm_nc_pin(dapm, "LINER");
+	snd_soc_dapm_nc_pin(dapm, "PHONEIN");
+	snd_soc_dapm_nc_pin(dapm, "MIC1");
+	snd_soc_dapm_nc_pin(dapm, "MONO");
+
+	/* Set endpoints to default off mode */
+	snd_soc_dapm_enable_pin(dapm, "Internal Speaker");
+	snd_soc_dapm_enable_pin(dapm, "Internal Mic");
+	snd_soc_dapm_disable_pin(dapm, "Headphone Jack");
+
+	snd_soc_dapm_force_enable_pin(dapm, "Mic Bias2");		
+			  
+	ret = snd_soc_dapm_sync(dapm);
+	if (ret) {
+		dev_err(card->dev,"Failed to sync\n");
+		return ret;
+	}
+	
 	ctx->init_done = 1;
 
 	return ret;
@@ -789,6 +798,7 @@ static struct snd_soc_card tegra_snd_soc_card = {
 	.dai_link 	= tegra_soc_dai,
 	.num_links 	= ARRAY_SIZE(tegra_soc_dai),
 	
+#if 0	
 	.dapm_widgets = tegra_dapm_widgets,
 	.num_dapm_widgets = ARRAY_SIZE(tegra_dapm_widgets),
 	
@@ -798,6 +808,7 @@ static struct snd_soc_card tegra_snd_soc_card = {
 #ifdef SHUTTLE_MANUAL_CONTROL_OF_OUTPUTDEVICE
 	.controls = tegra_controls,
 	.num_controls = ARRAY_SIZE(tegra_controls),
+#endif
 #endif
 	
 	.suspend_pre = tegra_soc_suspend_pre,

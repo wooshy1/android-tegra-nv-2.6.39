@@ -186,11 +186,12 @@ static __initdata struct tegra_clk_init_table shuttle_clk_init_table[] = {
 #endif
 
 	{ CDEV2,   NULL /*"pll_p_out4"*/,0/*26000000*/,  false}, 	/* probably used as USB clock - perhaps 24mhz ?*/	
-	
+#if 0	
 	{ "i2c1_i2c",	"pll_p_out3",	 72000000,	false},		/* tegra-i2c.0 */
 	{ "i2c2_i2c",	"pll_p_out3",	 72000000,	false},		/* tegra-i2c.1 */
 	{ "i2c3_i2c",	"pll_p_out3",	 72000000,	false},		/* tegra-i2c.2 */
 	{ "dvc_i2c",	"pll_p_out3",	 72000000,	false},		/* tegra-i2c.3 */
+#endif
 
 	{ "i2c1",		"clk_m",		   800000,	false},		/* tegra-i2c.0 */
 	{ "i2c2",		"clk_m",		   315789,	false},		/* tegra-i2c.1 */
