@@ -733,6 +733,41 @@ static struct tegra_suspend_platform_data shuttle_suspend = {
 	.board_resume = shuttle_board_resume, 	
 };
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+static struct resource ram_console_resources[] = {
+	{
+		.flags = IORESOURCE_MEM,
+	},
+ };
+ 
+ static struct platform_device ram_console_device = {
+	.name           = "ram_console",
+	.id             = -1,
+	.num_resources  = ARRAY_SIZE(ram_console_resources),
+	.resource       = ram_console_resources,
+};
+
+static void __init tegra_ramconsole_reserve(unsigned long size)
+{
+	struct resource *res;
+	long ret;
+
+	res = platform_get_resource(&ram_console_device, IORESOURCE_MEM, 0);
+	if (!res) {
+		pr_err("Failed to find memory resource for ram console\n");
+		return;
+	}
+	res->start = memblock_end_of_DRAM() - size;
+	res->end = res->start + size - 1;
+	ret = memblock_remove(res->start, size);
+	if (ret) {
+		ram_console_device.resource = NULL;
+		ram_console_device.num_resources = 0;
+		pr_err("Failed to reserve memory block for ram console\n");
+	}
+}
+#endif
+
 static void __init tegra_shuttle_init(void)
 {
 	struct clk *clk;
@@ -832,6 +867,11 @@ static void __init tegra_shuttle_init(void)
 	dump_bootflags();
 #endif
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	/* Register the RAM console device */
+	platform_device_register(&ram_console_device);
+#endif
+
 	/* Release the tegra bootloader framebuffer */
 	tegra_release_bootloader_fb();
 }
@@ -844,6 +884,11 @@ static void __init tegra_shuttle_reserve(void)
 #if defined(DYNAMIC_GPU_MEM)
 	/* Reserve the graphics memory */
 	tegra_reserve(SHUTTLE_GPU_MEM_SIZE, SHUTTLE_FB1_MEM_SIZE, SHUTTLE_FB2_MEM_SIZE);
+#endif
+
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	/* Reserve 1M memory for the RAM console */
+	tegra_ramconsole_reserve(SZ_1M);
 #endif
 }
 
