@@ -398,7 +398,7 @@ static int evdev_fetch_next_event(struct evdev_client *client,
 	if (have_event) {
 		*event = client->buffer[client->tail++];
 		client->tail &= client->bufsize - 1;
-		if (client->head == client->tail)
+		if (client->head == client->tail && client->use_wakelock)
 			wake_unlock(&client->wake_lock);
 	}
 
