@@ -480,50 +480,51 @@
 
 #define IDX_AD_DA_MIXER_INTERNAL	0x54	/* AD DA internal mixer register */
 
+#define VIRTUAL_REG_FIRST  (ALC5624_VENDOR_ID2+1) /* First virtual register */
 
 /* virtual HP mixers regs */
-#define VIRTUAL_HPL_MIXER	(ALC5624_VENDOR_ID2+2)
-#define VIRTUAL_HPR_MIXER	(ALC5624_VENDOR_ID2+4)
+#define VIRTUAL_HPL_MIXER	(ALC5624_VENDOR_ID2+1)
+#define VIRTUAL_HPR_MIXER	(ALC5624_VENDOR_ID2+2)
 
 /* Virtual index registers: Useful for equalizer settings */
-#define VIRTUAL_IDX_BASE (ALC5624_VENDOR_ID2+6)
+#define VIRTUAL_IDX_BASE (ALC5624_VENDOR_ID2+3)
 
-#define VIRTUAL_IDX_EQ_BAND0_COEFF 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND0_COEFF)
-#define VIRTUAL_IDX_EQ_BAND0_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND0_GAIN)
+#define VIRTUAL_IDX_EQ_BAND0_COEFF 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND0_COEFF )
+#define VIRTUAL_IDX_EQ_BAND0_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND0_GAIN  )
 	
 #define VIRTUAL_IDX_EQ_BAND1_COEFF0 		(VIRTUAL_IDX_BASE+IDX_EQ_BAND1_COEFF0)
 #define VIRTUAL_IDX_EQ_BAND1_COEFF1 		(VIRTUAL_IDX_BASE+IDX_EQ_BAND1_COEFF1)
-#define VIRTUAL_IDX_EQ_BAND1_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND1_GAIN)
+#define VIRTUAL_IDX_EQ_BAND1_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND1_GAIN  )
 
 #define VIRTUAL_IDX_EQ_BAND2_COEFF0 		(VIRTUAL_IDX_BASE+IDX_EQ_BAND2_COEFF0)
 #define VIRTUAL_IDX_EQ_BAND2_COEFF1 		(VIRTUAL_IDX_BASE+IDX_EQ_BAND2_COEFF1)
-#define VIRTUAL_IDX_EQ_BAND2_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND2_GAIN)
+#define VIRTUAL_IDX_EQ_BAND2_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND2_GAIN  )
 
 #define VIRTUAL_IDX_EQ_BAND3_COEFF0 		(VIRTUAL_IDX_BASE+IDX_EQ_BAND3_COEFF0)
 #define VIRTUAL_IDX_EQ_BAND3_COEFF1 		(VIRTUAL_IDX_BASE+IDX_EQ_BAND3_COEFF1)
-#define VIRTUAL_IDX_EQ_BAND3_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND3_GAIN)
+#define VIRTUAL_IDX_EQ_BAND3_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND3_GAIN  )
 
-#define VIRTUAL_IDX_EQ_BAND4_COEFF 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND4_COEFF)
-#define VIRTUAL_IDX_EQ_BAND4_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND4_GAIN)
+#define VIRTUAL_IDX_EQ_BAND4_COEFF 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND4_COEFF )
+#define VIRTUAL_IDX_EQ_BAND4_GAIN 			(VIRTUAL_IDX_BASE+IDX_EQ_BAND4_GAIN  )
 
-#define VIRTUAL_IDX_EQ_CTRL_STAT 			(VIRTUAL_IDX_BASE+IDX_EQ_CTRL_STAT)
-#define VIRTUAL_IDX_EQ_INPUT_VOL 			(VIRTUAL_IDX_BASE+IDX_EQ_INPUT_VOL)
-#define VIRTUAL_IDX_EQ_OUTPUT_VOL 			(VIRTUAL_IDX_BASE+IDX_EQ_OUTPUT_VOL)
+#define VIRTUAL_IDX_EQ_CTRL_STAT 			(VIRTUAL_IDX_BASE+IDX_EQ_CTRL_STAT   )
+#define VIRTUAL_IDX_EQ_INPUT_VOL 			(VIRTUAL_IDX_BASE+IDX_EQ_INPUT_VOL   )
+#define VIRTUAL_IDX_EQ_OUTPUT_VOL 			(VIRTUAL_IDX_BASE+IDX_EQ_OUTPUT_VOL  )
 
-#define VIRTUAL_IDX_AUTO_VOL_CTRL0 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL0)
-#define VIRTUAL_IDX_AUTO_VOL_CTRL1 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL1)
-#define VIRTUAL_IDX_AUTO_VOL_CTRL2 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL2)
-#define VIRTUAL_IDX_AUTO_VOL_CTRL3 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL3)
-#define VIRTUAL_IDX_AUTO_VOL_CTRL4 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL4)
-#define VIRTUAL_IDX_AUTO_VOL_CTRL5 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL5)
+#define VIRTUAL_IDX_AUTO_VOL_CTRL0 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL0 )
+#define VIRTUAL_IDX_AUTO_VOL_CTRL1 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL1 )
+#define VIRTUAL_IDX_AUTO_VOL_CTRL2 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL2 )
+#define VIRTUAL_IDX_AUTO_VOL_CTRL3 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL3 )
+#define VIRTUAL_IDX_AUTO_VOL_CTRL4 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL4 )
+#define VIRTUAL_IDX_AUTO_VOL_CTRL5 			(VIRTUAL_IDX_BASE+IDX_AUTO_VOL_CTRL5 )
 
-#define VIRTUAL_IDX_DIG_INTERNAL 			(VIRTUAL_IDX_BASE+IDX_DIG_INTERNAL)
+#define VIRTUAL_IDX_DIG_INTERNAL 			(VIRTUAL_IDX_BASE+IDX_DIG_INTERNAL   )
 
 #define VIRTUAL_IDX_CLASS_D_TEMP_SENSOR 	(VIRTUAL_IDX_BASE+IDX_CLASS_D_TEMP_SENSOR)
 
 #define VIRTUAL_IDX_AD_DA_MIXER_INTERNAL 	(VIRTUAL_IDX_BASE+IDX_AD_DA_MIXER_INTERNAL)
 
-#define REGISTER_COUNT (VIRTUAL_IDX_AD_DA_MIXER_INTERNAL + 2)
+#define REGISTER_COUNT (VIRTUAL_IDX_AD_DA_MIXER_INTERNAL + 1)
 
 /* Streams that can be running */
 #define ALC5624_STREAM_PLAYBACK 1
@@ -1608,7 +1609,7 @@ static int alc5624_hw_write(void* control_data,const char* data_in_s,int len)
 		/* Access the indexed register */
 		data[0] = ALC5624_INDEX_ADDRESS;
 		data[1] = 0; /* hi */
-		data[2] = data_in[0]-VIRTUAL_IDX_BASE; /* lo */
+		data[2] = (data_in[0] - VIRTUAL_IDX_BASE); /* lo */
 		if ((ret = alc5624->bus_hw_write(alc5624->bus_control_data,data,3)) < 0)
 			return ret;
 
@@ -1629,7 +1630,7 @@ static void alc5624_sync_cache(struct snd_soc_codec *codec)
 {
 	/*struct alc5624_priv *alc5624 = snd_soc_codec_get_drvdata(codec);*/
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,36)
-	int i, step = 2, size = REGISTER_COUNT;
+	int i, step = 1, size = REGISTER_COUNT;
 #else
 	int i, step = codec->driver->reg_cache_step, size = codec->driver->reg_cache_size;
 #endif
@@ -1646,6 +1647,9 @@ static void alc5624_sync_cache(struct snd_soc_codec *codec)
 	 * hardware default.
 	 */
 	for (i = 2 ; i < size ; i += step) {
+		/* Skip non implemented registers if non virtual */
+		if ((i & 1) && i < VIRTUAL_REG_FIRST)
+			continue;
 		data[0] = i;
 		data[1] = cache[i] >> 8;
 		data[2] = cache[i];
@@ -1923,9 +1927,10 @@ static unsigned int alc5624_hw_read(struct snd_soc_codec *codec,
 		int ret;
 		
 		/* Access the indexed register */
+		reg = (reg - VIRTUAL_IDX_BASE);
 		data[0] = ALC5624_INDEX_ADDRESS;
-		data[1] = (u8)((reg-VIRTUAL_IDX_BASE) >> 8);
-		data[2] = (u8)(reg-VIRTUAL_IDX_BASE);
+		data[1] = (u8)(reg >> 8);
+		data[2] = (u8)(reg);
 		if ((ret = alc5624->bus_hw_write(alc5624->bus_control_data,data,3)) < 0)
 			return ret;
 			
@@ -1946,13 +1951,19 @@ static void alc5624_fill_cache(struct snd_soc_codec *codec)
 {
 	/*struct alc5624_priv *alc5624 = snd_soc_codec_get_drvdata(codec);*/
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,36)
-	int i, step = 2, size = REGISTER_COUNT;
+	int i, step = 1, size = REGISTER_COUNT;
 #else
 	int i, step = codec->driver->reg_cache_step, size = codec->driver->reg_cache_size;
 #endif
 	u16 *cache = codec->reg_cache;
-	for (i = 0 ; i < size ; i += step)
+	for (i = 0 ; i < size ; i += step) {
+		/* Skip non implemented registers if non virtual */
+		if ((i & 1) && i < VIRTUAL_REG_FIRST) {
+			cache[i] = 0;
+			continue;
+		}
 		cache[i] = alc5624_hw_read(codec, i);
+	}
 }
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
@@ -2077,7 +2088,7 @@ static int alc5624_probe(struct snd_soc_codec *codec)
 	} /* else 0=2.25v bias */
 	
 	/* Set the amplifier biases */
-	snd_soc_update_bits(codec,ALC5624_GEN_CTRL_REG1, 0x03F8, reg);
+	snd_soc_update_bits(codec, ALC5624_GEN_CTRL_REG1, 0x03F8, reg);
 	
 	/* Enable strong amp if using spkvdd >= 3v */
 	snd_soc_update_bits(codec, ALC5624_MISC_CTRL, 0x4000, (alc5624->spkvdd_mv >= 3000) ? 0x0000 : 0x4000);
@@ -2141,7 +2152,7 @@ static struct snd_soc_codec_driver soc_codec_device_alc5624 = {
 	.set_bias_level 	= alc5624_set_bias_level,
 	.reg_cache_size 	= REGISTER_COUNT,
 	.reg_word_size 		= sizeof(u16),
-	.reg_cache_step 	= 2,
+	.reg_cache_step 	= 1, /* Only used to display registers - virtual regs use step 1*/
 };
 #endif
 

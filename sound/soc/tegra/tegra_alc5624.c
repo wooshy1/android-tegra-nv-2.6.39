@@ -15,10 +15,11 @@
  *  option) any later version.
  *
  */
- 
-#define DEBUG
 
 /* Shuttle uses MIC2 as the mic input */
+ 
+#define DEBUG
+#define FORCE_AUTO_SPK_HP_SWITCH 1 /* Force autoswitch between headphone output and Speaker output */
  
 #include <asm/mach-types.h>
 
@@ -32,6 +33,7 @@
 #endif
 #include <linux/clk.h>
 #include <linux/tegra_audio.h>
+#include <linux/delay.h>
 
 #include <mach/clk.h>
 #include <mach/shuttle_audio.h>
@@ -41,7 +43,6 @@
 #include <sound/jack.h>
 
 #include <sound/core.h>
-#include <sound/jack.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 
@@ -49,6 +50,10 @@
 
 #include "tegra_pcm.h"
 #include "tegra_asoc_utils.h"
+
+#ifdef USE_ORG_DAS
+#include <mach/tegra_das.h>
+#endif
 
 #define DRV_NAME "tegra-snd-alc5624"
 
@@ -62,22 +67,23 @@ enum shuttle_audio_device {
 	SHUTTLE_AUDIO_DEVICE_MAX	   = 0x07	/* all audio sources */
 };
 
-struct shuttle_audio_priv {
+struct tegra_alc5624 {
 	struct tegra_asoc_utils_data util_data;
 #ifdef CONFIG_SWITCH
 	int jack_status;
 #endif
 	
 	struct snd_soc_jack   tegra_jack;		/* jack detection */
-	bool				  init_done;		/* init done */
 	int 				  play_device;		/* Playback devices bitmask */
 	int 				  capture_device;	/* Capture devices bitmask */
 	bool				  is_call_mode;		/* if we are in a call mode */
 	int					  gpio_hp_det;		/* GPIO used to detect Headphone plugged in */
+#ifndef USE_ORG_DAS	
 	int					  hifi_codec_datafmt;/* HiFi codec data format */
 	bool				  hifi_codec_master;/* If Hifi codec is master */
 	int					  bt_codec_datafmt;	/* Bluetooth codec data format */
 	bool				  bt_codec_master;	/* If bt codec is master */
+#endif
 };
 
 /* mclk required for each sampling frequency */
@@ -130,7 +136,7 @@ static int tegra_hifi_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai 	= rtd->cpu_dai;
 	struct snd_soc_codec *codec		= rtd->codec;
 	struct snd_soc_card* card		= codec->card;
-	struct shuttle_audio_priv* ctx 	= snd_soc_card_get_drvdata(card);
+	struct tegra_alc5624* machine 	= snd_soc_card_get_drvdata(card);
 	
 	int sys_clk;
 	int err;
@@ -139,18 +145,52 @@ static int tegra_hifi_hw_params(struct snd_pcm_substream *substream,
 	/* Get the requested sampling rate */
 	unsigned int srate = params_rate(params);
 	
+#ifdef USE_ORG_DAS		
 	/* I2S <-> DAC <-> DAS <-> DAP <-> CODEC
 	   -If DAP is master, codec will be slave */
-	bool codec_is_master = ctx->hifi_codec_master;
+	int codec_is_master = !tegra_das_is_port_master(tegra_audio_codec_type_hifi);
 	
 	/* Get DAS dataformat - DAP is connecting to codec */
-	int dai_flag = ctx->hifi_codec_datafmt;
+	enum dac_dap_data_format data_fmt = tegra_das_get_codec_data_fmt(tegra_audio_codec_type_hifi);
+
+	/* We are supporting DSP and I2s format for now */
+	int dai_flag = 0;
+	if (data_fmt & dac_dap_data_format_i2s)
+		dai_flag |= SND_SOC_DAIFMT_I2S;
+	else
+		dai_flag |= SND_SOC_DAIFMT_DSP_A;
+	
+	if (codec_is_master)
+		dai_flag |= SND_SOC_DAIFMT_CBM_CFM; /* codec is master */
+	else
+		dai_flag |= SND_SOC_DAIFMT_CBS_CFS; 
+#else
+
+	/* I2S <-> DAC <-> DAS <-> DAP <-> CODEC
+	   -If DAP is master, codec will be slave */
+	bool codec_is_master = machine->hifi_codec_master;
+	
+	/* Get DAS dataformat - DAP is connecting to codec */
+	int dai_flag = machine->hifi_codec_datafmt;
+	
+	/* Depending on the number of channels, we must select the mode -
+		I2S only supports stereo operation, DSP_A can support mono 
+		with the ALC5624 */
+	/*t dai_flag = (params_channels(params) == 1) 
+						? SND_SOC_DAIFMT_DSP_A
+						: SND_SOC_DAIFMT_I2S;*/
+	
+	dev_dbg(card->dev,"%s(): cpu_dai:'%s'\n", __FUNCTION__,cpu_dai->name);
+	dev_dbg(card->dev,"%s(): codec_dai:'%s'\n", __FUNCTION__,codec_dai->name);
+	
 	if (codec_is_master)
 		dai_flag |= SND_SOC_DAIFMT_CBM_CFM; /* codec is master */
 	else
 		dai_flag |= SND_SOC_DAIFMT_CBS_CFS;
-	
-	dev_dbg(card->dev,"%s(): format: 0x%08x\n", __FUNCTION__,params_format(params));
+#endif
+
+	dev_dbg(card->dev,"%s(): format: 0x%08x, channels:%d, srate:%d\n", __FUNCTION__,
+		params_format(params),params_channels(params),params_rate(params));
 
 	/* Set the CPU dai format. This will also set the clock rate in master mode */
 	err = snd_soc_dai_set_fmt(cpu_dai, dai_flag);
@@ -164,17 +204,10 @@ static int tegra_hifi_hw_params(struct snd_pcm_substream *substream,
 		dev_err(card->dev,"codec_dai fmt not set \n");
 		return err;
 	}
-	
-	/* Get system clock */
-	sys_clk = clk_get_rate(ctx->util_data.clk_cdev1);
 
-	/* Set CPU sysclock as the same - in Tegra, seems to be a NOP */
-	err = snd_soc_dai_set_sysclk(cpu_dai, 0, sys_clk, SND_SOC_CLOCK_IN);
-	if (err < 0) {
-		dev_err(card->dev,"cpu_dai clock not set\n");
-		return err;
-	}
-	
+	/* Get system clock */
+	sys_clk = clk_get_rate(machine->util_data.clk_cdev1);
+
 	if (codec_is_master) {
 		dev_dbg(card->dev,"%s(): codec in master mode\n",__FUNCTION__);
 		
@@ -225,12 +258,12 @@ static int tegra_hifi_hw_params(struct snd_pcm_substream *substream,
 		}
 	}
 
-	err = tegra_asoc_utils_set_rate(&ctx->util_data, srate, sys_clk);
+	err = tegra_asoc_utils_set_rate(&machine->util_data, srate, sys_clk);
 	if (err < 0) {
 		dev_err(card->dev, "Can't configure clocks\n");
 		return err;
 	}
-	
+
 	/* Set CODEC sysclk */
 	err = snd_soc_dai_set_sysclk(codec_dai, 0, sys_clk, SND_SOC_CLOCK_IN);
 	if (err < 0) {
@@ -249,23 +282,43 @@ static int tegra_voice_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai 	= rtd->cpu_dai;
 	struct snd_soc_codec *codec		= rtd->codec;
 	struct snd_soc_card* card		= codec->card;
-	struct shuttle_audio_priv* ctx 	= snd_soc_card_get_drvdata(card);
+	struct tegra_alc5624* machine 	= snd_soc_card_get_drvdata(card);
 	
 	int sys_clk;
 	int err;
 
-	/* Get DAS dataformat and master flag */
-	int codec_is_master = ctx->bt_codec_master;
+#ifdef USE_ORG_DAS
+		/* Get DAS dataformat and master flag */
+	int codec_is_master = !tegra_das_is_port_master(tegra_audio_codec_type_bluetooth);
+	enum dac_dap_data_format data_fmt = tegra_das_get_codec_data_fmt(tegra_audio_codec_type_bluetooth);
 
 	/* We are supporting DSP and I2s format for now */
-	int dai_flag = ctx->bt_codec_datafmt;
+	int dai_flag = 0;
+	if (data_fmt & dac_dap_data_format_dsp)
+		dai_flag |= SND_SOC_DAIFMT_DSP_A;
+	else
+		dai_flag |= SND_SOC_DAIFMT_I2S;
 
 	if (codec_is_master)
 		dai_flag |= SND_SOC_DAIFMT_CBM_CFM; /* codec is master */
 	else
 		dai_flag |= SND_SOC_DAIFMT_CBS_CFS;
+#else
+	
+	/* Get DAS dataformat and master flag */
+	int codec_is_master = machine->bt_codec_master;
 
-	dev_dbg(card->dev,"%s(): format: 0x%08x\n", __FUNCTION__,params_format(params));
+	/* We are supporting DSP and I2s format for now */
+	int dai_flag = machine->bt_codec_datafmt;
+
+	if (codec_is_master)
+		dai_flag |= SND_SOC_DAIFMT_CBM_CFM; /* codec is master */
+	else
+		dai_flag |= SND_SOC_DAIFMT_CBS_CFS;
+#endif
+
+	dev_dbg(card->dev,"%s(): format: 0x%08x, channels:%d, srate:%d\n", __FUNCTION__,
+		params_format(params),params_channels(params),params_rate(params));
 
 	/* Set the CPU dai format. This will also set the clock rate in master mode */
 	err = snd_soc_dai_set_fmt(cpu_dai, dai_flag);
@@ -282,7 +335,7 @@ static int tegra_voice_hw_params(struct snd_pcm_substream *substream,
 	}
 	
 	/* Get system clock */
-	sys_clk = clk_get_rate(ctx->util_data.clk_cdev1);
+	sys_clk = clk_get_rate(machine->util_data.clk_cdev1);
 
 	/* Set CPU sysclock as the same - in Tegra, seems to be a NOP */
 	err = snd_soc_dai_set_sysclk(cpu_dai, 0, sys_clk, SND_SOC_CLOCK_IN);
@@ -312,6 +365,19 @@ static int tegra_spdif_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
+#ifdef USE_ORG_DAS
+static int tegra_codec_startup(struct snd_pcm_substream *substream)
+{
+	tegra_das_power_mode(true);
+	return 0;
+}
+
+static void tegra_codec_shutdown(struct snd_pcm_substream *substream)
+{
+	tegra_das_power_mode(false);
+}
+#endif 
+
 static int tegra_soc_suspend_pre(struct snd_soc_card* card)
 {
 	return 0;
@@ -319,16 +385,16 @@ static int tegra_soc_suspend_pre(struct snd_soc_card* card)
 
 static int tegra_soc_suspend_post(struct snd_soc_card* card)
 {
-	struct shuttle_audio_priv *ctx = snd_soc_card_get_drvdata(card);
-	clk_disable(ctx->util_data.clk_cdev1);
+	struct tegra_alc5624 *machine = snd_soc_card_get_drvdata(card);
+	clk_disable(machine->util_data.clk_cdev1);
 
 	return 0;
 }
 
 static int tegra_soc_resume_pre(struct snd_soc_card* card)
 {
-	struct shuttle_audio_priv *ctx = snd_soc_card_get_drvdata(card);
-	clk_enable(ctx->util_data.clk_cdev1);
+	struct tegra_alc5624 *machine = snd_soc_card_get_drvdata(card);
+	clk_enable(machine->util_data.clk_cdev1);
 
 	return 0;
 }
@@ -340,10 +406,18 @@ static int tegra_soc_resume_post(struct snd_soc_card *card)
 
 static struct snd_soc_ops tegra_hifi_ops = {
 	.hw_params = tegra_hifi_hw_params,
+#ifdef USE_ORG_DAS	
+	.startup = tegra_codec_startup,
+	.shutdown = tegra_codec_shutdown, 	
+#endif
 };
 
 static struct snd_soc_ops tegra_voice_ops = {
 	.hw_params = tegra_voice_hw_params,
+#ifdef USE_ORG_DAS	
+	.startup = tegra_codec_startup,
+	.shutdown = tegra_codec_shutdown, 	
+#endif
 };
 
 static struct snd_soc_ops tegra_spdif_ops = {
@@ -352,7 +426,7 @@ static struct snd_soc_ops tegra_spdif_ops = {
 
 /* ------- Tegra audio routing using DAS -------- */
 
-static void tegra_audio_route(struct shuttle_audio_priv* ctx,
+static void tegra_audio_route(struct tegra_alc5624* machine,
 			      int play_device, int capture_device)
 {
 	
@@ -363,7 +437,7 @@ static void tegra_audio_route(struct shuttle_audio_priv* ctx,
 
 	pr_debug("%s(): is_bt_sco_mode: %d, is_call_mode: %d\n", __FUNCTION__, is_bt_sco_mode, is_call_mode);
 
-#if 0	
+#ifdef USE_ORG_DAS
 	if (is_call_mode && is_bt_sco_mode) {
 		tegra_das_set_connection(tegra_das_port_con_id_voicecall_with_bt);
 	}
@@ -377,8 +451,8 @@ static void tegra_audio_route(struct shuttle_audio_priv* ctx,
 		tegra_das_set_connection(tegra_das_port_con_id_hifi);
 	}
 #endif
-	ctx->play_device = play_device;
-	ctx->capture_device = capture_device;
+	machine->play_device = play_device;
+	machine->capture_device = capture_device;
 }
 
 static int tegra_play_route_info(struct snd_kcontrol *kcontrol,
@@ -394,11 +468,11 @@ static int tegra_play_route_info(struct snd_kcontrol *kcontrol,
 static int tegra_play_route_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	struct shuttle_audio_priv* ctx = snd_kcontrol_chip(kcontrol);
+	struct tegra_alc5624* machine = snd_kcontrol_chip(kcontrol);
 
 	ucontrol->value.integer.value[0] = SHUTTLE_AUDIO_DEVICE_NONE;
-	if (ctx) {
-		ucontrol->value.integer.value[0] = ctx->play_device;
+	if (machine) {
+		ucontrol->value.integer.value[0] = machine->play_device;
 		return 0;
 	}
 	return -EINVAL;
@@ -407,13 +481,13 @@ static int tegra_play_route_get(struct snd_kcontrol *kcontrol,
 static int tegra_play_route_put(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	struct shuttle_audio_priv* ctx = snd_kcontrol_chip(kcontrol);
+	struct tegra_alc5624* machine = snd_kcontrol_chip(kcontrol);
 
-	if (ctx) {
+	if (machine) {
 		int play_device_new = ucontrol->value.integer.value[0];
 
-		if (ctx->play_device != play_device_new) {
-			tegra_audio_route(ctx, play_device_new, ctx->capture_device);
+		if (machine->play_device != play_device_new) {
+			tegra_audio_route(machine, play_device_new, machine->capture_device);
 			return 1;
 		}
 		return 0;
@@ -444,11 +518,11 @@ static int tegra_capture_route_info(struct snd_kcontrol *kcontrol,
 static int tegra_capture_route_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	struct shuttle_audio_priv* ctx = snd_kcontrol_chip(kcontrol);
+	struct tegra_alc5624* machine = snd_kcontrol_chip(kcontrol);
 
 	ucontrol->value.integer.value[0] = TEGRA_AUDIO_DEVICE_NONE;
-	if (ctx) {
-		ucontrol->value.integer.value[0] = ctx->capture_device;
+	if (machine) {
+		ucontrol->value.integer.value[0] = machine->capture_device;
 		return 0;
 	}
 	return -EINVAL;
@@ -457,14 +531,14 @@ static int tegra_capture_route_get(struct snd_kcontrol *kcontrol,
 static int tegra_capture_route_put(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	struct shuttle_audio_priv* ctx = snd_kcontrol_chip(kcontrol);
+	struct tegra_alc5624* machine = snd_kcontrol_chip(kcontrol);
 
-	if (ctx) {
+	if (machine) {
 		int capture_device_new = ucontrol->value.integer.value[0];
 
-		if (ctx->capture_device != capture_device_new) {
-			tegra_audio_route(ctx,
-				ctx->play_device , capture_device_new);
+		if (machine->capture_device != capture_device_new) {
+			tegra_audio_route(machine,
+				machine->play_device , capture_device_new);
 			return 1;
 		}
 		return 0;
@@ -495,12 +569,12 @@ static int tegra_call_mode_info(struct snd_kcontrol *kcontrol,
 static int tegra_call_mode_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	struct shuttle_audio_priv* ctx = snd_kcontrol_chip(kcontrol);
+	struct tegra_alc5624* machine = snd_kcontrol_chip(kcontrol);
 
 	ucontrol->value.integer.value[0] = 0;
-	if (ctx) {
-		int is_call_mode   = (ctx->play_device    & SHUTTLE_AUDIO_DEVICE_VOICE) ||
-							 (ctx->capture_device & SHUTTLE_AUDIO_DEVICE_VOICE);
+	if (machine) {
+		int is_call_mode   = (machine->play_device    & SHUTTLE_AUDIO_DEVICE_VOICE) ||
+							 (machine->capture_device & SHUTTLE_AUDIO_DEVICE_VOICE);
 	
 		ucontrol->value.integer.value[0] = is_call_mode ? 1 : 0;
 		return 0;
@@ -511,29 +585,29 @@ static int tegra_call_mode_get(struct snd_kcontrol *kcontrol,
 static int tegra_call_mode_put(struct snd_kcontrol *kcontrol,
 				   struct snd_ctl_elem_value *ucontrol)
 {
-	struct shuttle_audio_priv* ctx = snd_kcontrol_chip(kcontrol);
+	struct tegra_alc5624* machine = snd_kcontrol_chip(kcontrol);
 
-	if (ctx) {
-		int is_call_mode   = (ctx->play_device    & SHUTTLE_AUDIO_DEVICE_VOICE) ||
-							 (ctx->capture_device & SHUTTLE_AUDIO_DEVICE_VOICE);
+	if (machine) {
+		int is_call_mode   = (machine->play_device    & SHUTTLE_AUDIO_DEVICE_VOICE) ||
+							 (machine->capture_device & SHUTTLE_AUDIO_DEVICE_VOICE);
 	
 		int is_call_mode_new = ucontrol->value.integer.value[0];
 
 		if (is_call_mode != is_call_mode_new) {
 			if (is_call_mode_new) {
-				ctx->play_device 	|= SHUTTLE_AUDIO_DEVICE_VOICE;
-				ctx->capture_device |= SHUTTLE_AUDIO_DEVICE_VOICE;
-				ctx->play_device 	&= ~SHUTTLE_AUDIO_DEVICE_HIFI;
-				ctx->capture_device &= ~SHUTTLE_AUDIO_DEVICE_HIFI;
+				machine->play_device 	|= SHUTTLE_AUDIO_DEVICE_VOICE;
+				machine->capture_device |= SHUTTLE_AUDIO_DEVICE_VOICE;
+				machine->play_device 	&= ~SHUTTLE_AUDIO_DEVICE_HIFI;
+				machine->capture_device &= ~SHUTTLE_AUDIO_DEVICE_HIFI;
 			} else {
-				ctx->play_device 	&= ~SHUTTLE_AUDIO_DEVICE_VOICE;
-				ctx->capture_device &= ~SHUTTLE_AUDIO_DEVICE_VOICE;
-				ctx->play_device 	|= SHUTTLE_AUDIO_DEVICE_HIFI;
-				ctx->capture_device |= SHUTTLE_AUDIO_DEVICE_HIFI;
+				machine->play_device 	&= ~SHUTTLE_AUDIO_DEVICE_VOICE;
+				machine->capture_device &= ~SHUTTLE_AUDIO_DEVICE_VOICE;
+				machine->play_device 	|= SHUTTLE_AUDIO_DEVICE_HIFI;
+				machine->capture_device |= SHUTTLE_AUDIO_DEVICE_HIFI;
 			}
-			tegra_audio_route(ctx,
-				ctx->play_device,
-				ctx->capture_device);
+			tegra_audio_route(machine,
+				machine->play_device,
+				machine->capture_device);
 			return 1;
 		}
 		return 0;
@@ -555,21 +629,21 @@ static int tegra_das_controls_init(struct snd_soc_codec *codec)
 {
 	struct snd_soc_card *card = codec->card;
 	struct snd_card *scard = card->snd_card;
-	struct shuttle_audio_priv* ctx = snd_soc_card_get_drvdata(card);
+	struct tegra_alc5624* machine = snd_soc_card_get_drvdata(card);
 	int err;
 
 	/* Add play route control */
-	err = snd_ctl_add(scard, snd_ctl_new1(&tegra_play_route_control, ctx));
+	err = snd_ctl_add(scard, snd_ctl_new1(&tegra_play_route_control, machine));
 	if (err < 0)
 		return err;
 
 	/* Add capture route control */
-	err = snd_ctl_add(scard, snd_ctl_new1(&tegra_capture_route_control, ctx));
+	err = snd_ctl_add(scard, snd_ctl_new1(&tegra_capture_route_control, machine));
 	if (err < 0)
 		return err;
 
 	/* Add call mode switch control */
-	err = snd_ctl_add(scard, snd_ctl_new1(&tegra_call_mode_control, ctx));
+	err = snd_ctl_add(scard, snd_ctl_new1(&tegra_call_mode_control, machine));
 	if (err < 0)
 		return err;
 
@@ -584,8 +658,6 @@ static struct snd_soc_jack_gpio tegra_jack_gpios[] = {
 		/*.gpio is filled in initialization from platform data */
 	}
 };
-
-static struct snd_soc_jack tegra_alc5624_hp_jack;
 
 #ifdef CONFIG_SWITCH
 
@@ -605,13 +677,15 @@ static int tegra_alc5624_jack_notifier(struct notifier_block *self,
 	struct snd_soc_jack *jack = dev;
 	struct snd_soc_codec *codec = jack->codec;
 	struct snd_soc_card *card = codec->card;
-	struct shuttle_audio_priv* ctx = snd_soc_card_get_drvdata(card);
+	struct tegra_alc5624* machine = snd_soc_card_get_drvdata(card);
 	enum headset_state state = BIT_NO_HEADSET;
 
-	ctx->jack_status &= ~SND_JACK_HEADPHONE;
-	ctx->jack_status |= (action & SND_JACK_HEADPHONE);
+	dev_dbg(card->dev,"Jack notifier: Status: 0x%08x\n",machine->jack_status);
+	
+	machine->jack_status &= ~SND_JACK_HEADPHONE;
+	machine->jack_status |= (action & SND_JACK_HEADPHONE);
 
-	switch (ctx->jack_status) {
+	switch (machine->jack_status) {
 	case SND_JACK_HEADPHONE:
 		state = BIT_HEADSET_NO_MIC;
 		break;
@@ -630,9 +704,10 @@ static struct notifier_block tegra_alc5624_jack_detect_nb = {
 	.notifier_call = tegra_alc5624_jack_notifier,
 };
 
-#else
+#endif
 
 /* ------- Headphone jack autodetection  -------- */
+#if !defined(CONFIG_SWITCH) || defined(FORCE_AUTO_SPK_HP_SWITCH)
 static struct snd_soc_jack_pin tegra_jack_pins[] = {
 	/* Disable speaker when headphone is plugged in */
 	{
@@ -647,20 +722,18 @@ static struct snd_soc_jack_pin tegra_jack_pins[] = {
 		.invert = 0, /* Enable pin when status is reported */
 	},
 };
-
-
 #endif
 
 
 /*tegra machine dapm widgets */
-static struct snd_soc_dapm_widget tegra_dapm_widgets[] = {
+static struct snd_soc_dapm_widget tegra_alc5624_dapm_widgets[] = {
 	SND_SOC_DAPM_SPK("Internal Speaker", NULL),
 	SND_SOC_DAPM_HP("Headphone Jack", NULL),
 	SND_SOC_DAPM_MIC("Internal Mic", NULL),
 };
 
 /* Tegra machine audio map (connections to the codec pins) */
-static struct snd_soc_dapm_route audio_map[] = {
+static struct snd_soc_dapm_route shuttle_audio_map[] = {
 	{"Headphone Jack", NULL, "HPR"},
 	{"Headphone Jack", NULL, "HPL"},
 	{"Internal Speaker", NULL, "SPKL"},
@@ -671,71 +744,64 @@ static struct snd_soc_dapm_route audio_map[] = {
 	{"MIC2", NULL, "Mic Bias2"},
 };
 
-#ifdef SHUTTLE_MANUAL_CONTROL_OF_OUTPUTDEVICE
-static struct snd_kcontrol_new tegra_controls[] = {
+static struct snd_kcontrol_new tegra_alc5624_controls[] = {
 	SOC_DAPM_PIN_SWITCH("Internal Speaker"),
 	SOC_DAPM_PIN_SWITCH("Headphone Jack"),
 	SOC_DAPM_PIN_SWITCH("Internal Mic"),
 };
-#endif
 
-/* Called from the i2s driver when resuming play. No need to do anything in this case */
-void tegra_jack_resume(void)
-{
-}
-
-static int tegra_codec_init(struct snd_soc_pcm_runtime *rtd)
+static int tegra_alc5624_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct snd_soc_codec* codec = rtd->codec;
 	struct snd_soc_dapm_context* dapm = &codec->dapm;
 	struct snd_soc_card *card = codec->card;
-	struct shuttle_audio_priv* ctx = snd_soc_card_get_drvdata(card);
+	struct tegra_alc5624* machine = snd_soc_card_get_drvdata(card);
 	int ret = 0;
 	
-	if (ctx->init_done)
-		return 0;
-
 	/* Add the controls used to route audio to bluetooth/voice */
 	tegra_das_controls_init(codec);
 	
 	/* Store the GPIO used to detect headphone */
-	tegra_jack_gpios[0].gpio = ctx->gpio_hp_det;
+	tegra_jack_gpios[0].gpio = machine->gpio_hp_det;
 
-#ifdef SHUTTLE_MANUAL_CONTROL_OF_OUTPUTDEVICE	
-	ret = snd_soc_add_controls(codec, tegra_controls,
-				   ARRAY_SIZE(tegra_controls));
+	ret = snd_soc_add_controls(codec, tegra_alc5624_controls,
+				   ARRAY_SIZE(tegra_alc5624_controls));
 	if (ret < 0)
 		return ret;
-#endif
 
-	snd_soc_dapm_new_controls(dapm, tegra_dapm_widgets,
-					ARRAY_SIZE(tegra_dapm_widgets));
+	snd_soc_dapm_new_controls(dapm, tegra_alc5624_dapm_widgets,
+					ARRAY_SIZE(tegra_alc5624_dapm_widgets));
 
-	snd_soc_dapm_add_routes(dapm, audio_map,
-					ARRAY_SIZE(audio_map));
+	snd_soc_dapm_add_routes(dapm, shuttle_audio_map,
+					ARRAY_SIZE(shuttle_audio_map));
 
 	/* Headphone jack detection */		
 	ret = snd_soc_jack_new(codec, "Headphone Jack", SND_JACK_HEADPHONE,
-			 &ctx->tegra_jack);
-	if (ret)
+			 &machine->tegra_jack);
+	if (ret) {
+		dev_err(card->dev,"Unable to register jack\n");
 		return ret;
-#ifndef CONFIG_SWITCH		 
-	ret = snd_soc_jack_add_pins(&ctx->tegra_jack,
-			  ARRAY_SIZE(tegra_jack_pins),
-			  tegra_jack_pins);
-	if (ret)
-		return ret;
-#else
-	snd_soc_jack_notifier_register(&tegra_alc5624_hp_jack,
+	}
+	
+#ifdef CONFIG_SWITCH		 
+	/* Everytime the Jack status changes, notify our listerners */
+	snd_soc_jack_notifier_register(&machine->tegra_jack,
 				&tegra_alc5624_jack_detect_nb);
 #endif
 
-	ret = snd_soc_jack_add_gpios(&ctx->tegra_jack,
+#if !defined(CONFIG_SWITCH) || defined(FORCE_AUTO_SPK_HP_SWITCH)
+	/* Everytime the Jack status changes, update the DAPM pin status */
+	snd_soc_jack_add_pins(&machine->tegra_jack,
+			  ARRAY_SIZE(tegra_jack_pins),
+			  tegra_jack_pins);
+#endif
+
+	/* Everytime the Jack detect gpio changes, report a Jack status change */
+	ret = snd_soc_jack_add_gpios(&machine->tegra_jack,
 			   ARRAY_SIZE(tegra_jack_gpios),
 			   tegra_jack_gpios);
 	if (ret)
 		return ret;
-
 
 	/* Set endpoints to not connected */
 	snd_soc_dapm_nc_pin(dapm, "LINEL");
@@ -757,12 +823,10 @@ static int tegra_codec_init(struct snd_soc_pcm_runtime *rtd)
 		return ret;
 	}
 	
-	ctx->init_done = 1;
-
-	return ret;
+	return 0;
 }
 
-static struct snd_soc_dai_link tegra_soc_dai[] = {
+static struct snd_soc_dai_link tegra_alc5624_dai[] = {
 	{
 		.name = "ALC5624",
 		.stream_name = "ALC5624 HiFi",
@@ -770,8 +834,8 @@ static struct snd_soc_dai_link tegra_soc_dai[] = {
 		.platform_name = "tegra-pcm-audio",
 		.cpu_dai_name = "tegra20-i2s.0",
 		.codec_dai_name = "alc5624-hifi",
+		.init = tegra_alc5624_init,
 		.ops = &tegra_hifi_ops,
-		.init = tegra_codec_init,
 	},
 	{
 		.name = "VOICE",
@@ -793,23 +857,10 @@ static struct snd_soc_dai_link tegra_soc_dai[] = {
 	},
 };
 
-static struct snd_soc_card tegra_snd_soc_card = {
+static struct snd_soc_card snd_soc_tegra_alc5624 = {
 	.name		= "tegra-alc5624",
-	.dai_link 	= tegra_soc_dai,
-	.num_links 	= ARRAY_SIZE(tegra_soc_dai),
-	
-#if 0	
-	.dapm_widgets = tegra_dapm_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(tegra_dapm_widgets),
-	
-	.dapm_routes = audio_map,
-	.num_dapm_routes = ARRAY_SIZE(audio_map),
-	
-#ifdef SHUTTLE_MANUAL_CONTROL_OF_OUTPUTDEVICE
-	.controls = tegra_controls,
-	.num_controls = ARRAY_SIZE(tegra_controls),
-#endif
-#endif
+	.dai_link 	= tegra_alc5624_dai,
+	.num_links 	= ARRAY_SIZE(tegra_alc5624_dai),
 	
 	.suspend_pre = tegra_soc_suspend_pre,
 	.suspend_post = tegra_soc_suspend_post,
@@ -820,9 +871,9 @@ static struct snd_soc_card tegra_snd_soc_card = {
 /* initialization */
 static __devinit int tegra_snd_shuttle_probe(struct platform_device *pdev)
 {
-	struct snd_soc_card* card = &tegra_snd_soc_card;
-	struct shuttle_audio_platform_data* pdata;
-	struct shuttle_audio_priv *ctx;
+	struct snd_soc_card* card = &snd_soc_tegra_alc5624;
+	struct tegra_alc5624 *machine;
+	struct shuttle_audio_platform_data* pdata;	
 	int ret = 0;
 	
 	/* Get platform data */
@@ -833,57 +884,57 @@ static __devinit int tegra_snd_shuttle_probe(struct platform_device *pdev)
 	}
 
 	/* Allocate private context */
-	ctx = kzalloc(sizeof(struct shuttle_audio_priv), GFP_KERNEL);
-	if (!ctx) {
+	machine = kzalloc(sizeof(struct tegra_alc5624), GFP_KERNEL);
+	if (!machine) {
 		dev_err(&pdev->dev, "Can't allocate tegra_shuttle\n");
 		return -ENOMEM;
 	}
 	
-	ret = tegra_asoc_utils_init(&ctx->util_data, &pdev->dev);
+	ret = tegra_asoc_utils_init(&machine->util_data, &pdev->dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Can't initialize Tegra ASOC utils\n");
 		goto err_free_machine;
 	}
 	
-#ifdef CONFIG_SWITCH
-	/* Addd h2w swith class support */
-	ret = switch_dev_register(&tegra_alc5624_headset_switch);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Can't register SWITCH device\n");
-		goto err_fini_utils;
-	}
-#endif
-	
 	card->dev = &pdev->dev;
 	platform_set_drvdata(pdev, card); 
-	snd_soc_card_set_drvdata(card, ctx);
+	snd_soc_card_set_drvdata(card, machine);
 	
 	/* Fill in the GPIO used to detect the headphone */
-	ctx->gpio_hp_det = pdata->gpio_hp_det;
-	ctx->hifi_codec_datafmt = pdata->hifi_codec_datafmt;	/* HiFi codec data format */
-	ctx->hifi_codec_master = pdata->hifi_codec_master;		/* If Hifi codec is master */
-	ctx->bt_codec_datafmt = pdata->bt_codec_datafmt;		/* Bluetooth codec data format */
-	ctx->bt_codec_master = pdata->bt_codec_master;			/* If bt codec is master */
+	machine->gpio_hp_det = pdata->gpio_hp_det;
+#ifndef USE_ORG_DAS	
+	machine->hifi_codec_datafmt = pdata->hifi_codec_datafmt;	/* HiFi codec data format */
+	machine->hifi_codec_master = pdata->hifi_codec_master;		/* If Hifi codec is master */
+	machine->bt_codec_datafmt = pdata->bt_codec_datafmt;		/* Bluetooth codec data format */
+	machine->bt_codec_master = pdata->bt_codec_master;			/* If bt codec is master */
+#endif
 	
 	/* Add the device */
 	ret = snd_soc_register_card(card);
 	if (ret) {
 		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n",ret);
-		goto err_unregister_switch;
+		goto err_fini_utils;
 	}
-	
+
+#ifdef CONFIG_SWITCH
+	/* Addd h2w swith class support */
+	ret = switch_dev_register(&tegra_alc5624_headset_switch);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "Can't register SWITCH device\n");
+		goto err_unregister_card;
+	}
+#endif
+
 	dev_info(&pdev->dev, "Shuttle sound card registered\n");
 
 	return 0;
 	
-err_unregister_switch:
-#ifdef CONFIG_SWITCH
-	switch_dev_unregister(&tegra_alc5624_headset_switch);
-#endif
+err_unregister_card:
+	snd_soc_unregister_card(card);
 err_fini_utils:
-	tegra_asoc_utils_fini(&ctx->util_data);
+	tegra_asoc_utils_fini(&machine->util_data);
 err_free_machine:
-	kfree(ctx);
+	kfree(machine);
 	return ret;
 	
 }
@@ -891,17 +942,17 @@ err_free_machine:
 static int __devexit tegra_snd_shuttle_remove(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
-	struct shuttle_audio_priv *ctx = snd_soc_card_get_drvdata(card);
+	struct tegra_alc5624 *machine = snd_soc_card_get_drvdata(card);
 	
 	snd_soc_unregister_card(card);
 	
-	tegra_asoc_utils_fini(&ctx->util_data);
-
 #ifdef CONFIG_SWITCH
 	switch_dev_unregister(&tegra_alc5624_headset_switch);
 #endif
+
+	tegra_asoc_utils_fini(&machine->util_data);
 	
-	kfree(ctx);
+	kfree(machine);
 	
 	return 0;
 }

@@ -147,9 +147,9 @@ static __initdata struct tegra_clk_init_table shuttle_clk_init_table[] = {
 	{ "csus",		"clk_m",		 12000000,	false},		/* tegra_camera */
 
 #ifdef ALC5624_IS_MASTER		
-	{ "i2s1",   	"clk_m",         12000000,  false},		/* i2s.0 */
-	{ "i2s2",		"clk_m",	     12000000,	false},		/* i2s.1 */
-	{ "audio", 		"i2s1",          12000000,  false},
+	{ "i2s1",   	"clk_m",         12288000,  false},		/* i2s.0 */
+	{ "i2s2",		"clk_m",	     12288000,	false},		/* i2s.1 */
+	{ "audio", 		"i2s1",          12288000,  false},
 	{ "audio_2x",	"audio",		 24000000,	false},
 	{ "spdif_in",	"pll_p",		 36000000,	false},
 	{ "spdif_out",  "pll_a_out0",  	  6144000,  false},

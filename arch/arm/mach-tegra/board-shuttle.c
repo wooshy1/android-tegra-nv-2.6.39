@@ -881,9 +881,13 @@ static void __init tegra_shuttle_reserve(void)
 	if (memblock_reserve(0x0, 4096) < 0)
 		pr_warn("Cannot reserve first 4K of memory for safety\n");
 
+	/* Reserve the graphics memory */		
 #if defined(DYNAMIC_GPU_MEM)
-	/* Reserve the graphics memory */
+#if defined(CONFIG_NVMAP_CONVERT_CARVEOUT_TO_IOVMM)	
+	tegra_reserve(0, SHUTTLE_FB1_MEM_SIZE, SHUTTLE_FB2_MEM_SIZE);
+#else
 	tegra_reserve(SHUTTLE_GPU_MEM_SIZE, SHUTTLE_FB1_MEM_SIZE, SHUTTLE_FB2_MEM_SIZE);
+#endif
 #endif
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE

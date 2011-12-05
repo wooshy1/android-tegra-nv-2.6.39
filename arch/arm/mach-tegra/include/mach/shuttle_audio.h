@@ -15,10 +15,14 @@
  *
  */
 
+#include "../../board-shuttle.h"
+
 struct shuttle_audio_platform_data {
 	int 				  gpio_hp_det;		/* GPIO used to detect Headphone plugged in */
+#ifndef USE_ORG_DAS
 	int					  hifi_codec_datafmt;/* HiFi codec data format */
 	bool				  hifi_codec_master;/* If Hifi codec is master */
 	int					  bt_codec_datafmt;	/* Bluetooth codec data format */
 	bool				  bt_codec_master;	/* If bt codec is master */
+#endif
 };

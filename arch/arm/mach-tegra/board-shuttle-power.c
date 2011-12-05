@@ -273,7 +273,7 @@ static struct regulator_init_data sm1_data
 static struct regulator_init_data sm2_data  		 
 	= ADJ_REGULATOR_INIT(sm2, 3000, 4550, 1, 1); // 3700
 static struct regulator_init_data ldo0_data 		 
-	= ADJ_REGULATOR_INIT(ldo0,1250, 3350, 0, 0); // 3300
+	= ADJ_REGULATOR_INIT(ldo0,1250, 3350, 0, 0); // 3300 
 static struct regulator_init_data ldo1_data 		 
 	= ADJ_REGULATOR_INIT(ldo1, 725, 1500, 1, 1); // 1100  V-1V2
 static struct regulator_init_data ldo2_data 		 
@@ -287,9 +287,9 @@ static struct regulator_init_data ldo5_data
 static struct regulator_init_data ldo6_data 		 
 	= ADJ_REGULATOR_INIT(ldo6,1250, 3350, 1, 1); // 2850  V-3V3 USB
 static struct regulator_init_data ldo7_data 		 
-	= ADJ_REGULATOR_INIT(ldo7,1250, 3350, 0, 0); // 3300  V-SDIO
+	= ADJ_REGULATOR_INIT(ldo7,1250, 3350, 0, 0); // 3300  V-SDIO 
 static struct regulator_init_data ldo8_data 		 
-	= ADJ_REGULATOR_INIT(ldo8,1250, 3350, 0, 0); // 1800  V-2V8
+	= ADJ_REGULATOR_INIT(ldo8,1250, 3350, 0, 0); // 1800  V-2V8 
 static struct regulator_init_data ldo9_data 		 
 	= ADJ_REGULATOR_INIT(ldo9,1250, 3350, 1, 1); // 2850
 static struct regulator_init_data rtc_data  		 
@@ -304,7 +304,7 @@ static struct regulator_init_data ldo_tps74201_data
 static struct regulator_init_data buck_tps62290_data 
 	= FIXED_REGULATOR_INIT(buck_tps62290, 1050, 1, 1 ); // 1050 (VDD1.05, AVDD_PEX ... enabled by PMU_GPIO[2] (1=enabled)
 static struct regulator_init_data ldo_tps72012_data  
-	= FIXED_REGULATOR_INIT(ldo_tps72012 , 1200, 0, 0 ); // 1200 (VDD1.2, VCORE_WIFI ...) enabled by PMU_GPIO[1] (1=enabled)
+	= FIXED_REGULATOR_INIT(ldo_tps72012 , 1200, 0, 0 ); // 1200 (VDD1.2, VCORE_WIFI ...) enabled by PMU_GPIO[1] (1=enabled) 
 
 static struct regulator_init_data ldo_tps2051B_data  
 	= FIXED_REGULATOR_INIT(ldo_tps2051B , 5000, 1, 1 ); // 5000 (VDDIO_VID), enabled by AP_GPIO Port T, pin2, 

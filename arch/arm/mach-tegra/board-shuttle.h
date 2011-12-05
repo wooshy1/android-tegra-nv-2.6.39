@@ -188,6 +188,9 @@ extern int shuttle_camera_pm_register_devices(void);
 #	define SHUTTLE_FB_HDMI_SIZE TEGRA_ROUND_ALLOC(1280*720*(32/8)*SHUTTLE_FB_PAGES)
 #endif
 
+/* Use codec as master */
+/*#define ALC5624_IS_MASTER 1*/
+/*#define USE_ORG_DAS 1*/
 
 #endif
 
