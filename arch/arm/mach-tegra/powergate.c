@@ -414,9 +414,9 @@ static int tegra_powergate_set(int id, bool new_state)
 {
 	bool status;
 	unsigned long flags;
-	/* 10us timeout for toggle operation if it takes affect*/
+	/* 20us timeout for toggle operation if it takes affect*/
 	int toggle_timeout = 10;
-	/* 100 * 10 = 1000us timeout for toggle command to take affect in case
+	/* 100 * 10 = 4000us timeout for toggle command to take affect in case
 	   of contention with h/w initiated CPU power gating */
 	int contention_timeout = 100;
 
@@ -424,9 +424,10 @@ static int tegra_powergate_set(int id, bool new_state)
 
 	status = !!(pmc_read(PWRGATE_STATUS) & (1 << id));
 
+	/* If already on that state, we are done! */
 	if (status == new_state) {
 		spin_unlock_irqrestore(&tegra_powergate_lock, flags);
-		return -EINVAL;
+		return 0;
 	}
 
 	if (TEGRA_IS_CPU_POWERGATE_ID(id)) {

@@ -264,6 +264,11 @@ static int tegra_fb_blank(int blank, struct fb_info *info)
 	}
 }
 
+void tegra_fb_suspend(struct tegra_fb_info *tegra_fb)
+{
+	flush_workqueue(tegra_fb->flip_wq);
+}
+
 static int tegra_fb_pan_display(struct fb_var_screeninfo *var,
 				struct fb_info *info)
 {
@@ -436,8 +441,8 @@ static int tegra_fb_set_windowattr(struct tegra_fb_info *tegra_fb,
 
 	/* STOPSHIP verify that this won't read outside of the surface */
 	win->phys_addr   = flip_win->phys_addr + flip_win->attr.offset;
-	win->phys_addr_u = flip_win->phys_addr + flip_win->attr.offset_u;
-	win->phys_addr_v = flip_win->phys_addr + flip_win->attr.offset_v;
+	win->phys_addr_u = win->phys_addr + flip_win->attr.offset_u;
+	win->phys_addr_v = win->phys_addr + flip_win->attr.offset_v;
 	win->stride = flip_win->attr.stride;
 	win->stride_uv = flip_win->attr.stride_uv;
 
@@ -667,6 +672,7 @@ void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 						  struct fb_videomode *mode))
 {
 	struct fb_event event;
+	struct fb_modelist *m;
 	int i;
 
 	mutex_lock(&fb_info->info->lock);
@@ -696,6 +702,24 @@ void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 			fb_add_videomode(&specs->modedb[i],
 					 &fb_info->info->modelist);
 		}
+	}
+
+	if (list_empty(&fb_info->info->modelist)) {
+		struct tegra_dc_mode mode;
+		memset(&fb_info->info->var, 0x0, sizeof(fb_info->info->var));
+		memset(&mode, 0x0, sizeof(mode));
+		tegra_dc_set_mode(fb_info->win->dc, &mode);
+	} else {
+		/* in case the first mode was not matched */
+		m = list_first_entry(&fb_info->info->modelist, struct fb_modelist, list);
+		m->mode.flag |= FB_MODE_IS_FIRST;
+		fb_info->info->mode = (struct fb_videomode *)
+			fb_find_best_display(specs, &fb_info->info->modelist);
+
+		memset(&fb_info->info->var, 0x0,
+		       sizeof(fb_info->info->var));
+		fb_videomode_to_var(&fb_info->info->var, fb_info->info->mode);
+		tegra_fb_set_par(fb_info->info);
 	}
 
 	event.info = fb_info->info;

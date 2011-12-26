@@ -2850,6 +2850,7 @@ static int tegra_dc_suspend(struct nvhost_device *ndev, pm_message_t state)
 		dc->out_ops->suspend(dc);
 
 	if (dc->enabled) {
+		tegra_fb_suspend(dc->fb);
 		_tegra_dc_disable(dc);
 
 		dc->suspended = true;

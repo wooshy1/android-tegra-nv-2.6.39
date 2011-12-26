@@ -18,7 +18,7 @@
 
 /* Shuttle uses MIC2 as the mic input */
  
-#define DEBUG
+/* #define DEBUG */
 #define FORCE_AUTO_SPK_HP_SWITCH 1 /* Force autoswitch between headphone output and Speaker output */
  
 #include <asm/mach-types.h>

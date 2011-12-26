@@ -14,7 +14,7 @@
  *
  */
  
-#define DEBUG
+/*#define DEBUG*/
 
 #include <linux/module.h>
 #include <linux/version.h>
@@ -1559,6 +1559,8 @@ static int alc5624_hw_write(void* control_data,const char* data_in_s,int len)
 	struct alc5624_priv *alc5624 = control_data;
 	u8* data_in = (u8*)data_in_s;
 	
+	pr_debug("%s: reg:0x%02x val:0x%02x0x%02x\n",__FUNCTION__,data_in[0],data_in[1],data_in[2]);
+	
 	/* If dealing with the main volume, scale it as requested */
 	if (data_in[0] == ALC5624_SPK_OUT_VOL) {
 	
@@ -1637,12 +1639,8 @@ static void alc5624_sync_cache(struct snd_soc_codec *codec)
 	u16 *cache = codec->reg_cache;
 	u8 data[3];
 
-	/* Already synchronized, no need to resync again */
-	if (!codec->cache_sync)
-		return;
-
-	codec->cache_only = 0;
-
+	pr_debug("%s: Synchronizing codec regs to cache\n",__FUNCTION__);
+	
 	/* Sync back cached values if they're different from the
 	 * hardware default.
 	 */
@@ -1655,8 +1653,6 @@ static void alc5624_sync_cache(struct snd_soc_codec *codec)
 		data[2] = cache[i];
 		alc5624_hw_write(codec->control_data, data, 3);
 	}
-
-	codec->cache_sync = 0;
 };
 
 /* Reset the codec */
@@ -1783,9 +1779,6 @@ static int alc5624_set_bias_level(struct snd_soc_codec *codec,
 		snd_soc_update_bits(codec,ALC5624_PWR_MANAG_ADD2,0x3400,0x0000);
 		snd_soc_update_bits(codec,ALC5624_PD_CTRL_STAT,0x2F00,0x2F00);
 
-		/* Make sure all writes from now on will be resync when resuming */
-		codec->cache_sync = 1;
-		
 		/* Disable the codec MCLK */
 		clk_disable(alc5624->mclk);
 		
@@ -2272,7 +2265,6 @@ static __devinit int alc5624_i2c_probe(struct i2c_client *client,
 	codec->reg_cache_size = REGISTER_COUNT;
 	codec->reg_cache = &alc5624->reg_cache[0];
 	codec->volatile_register = alc5624_volatile_register;	
-	codec->cache_sync = 1;
 	codec->idle_bias_off = 1;
 	
 	codec->dev = &client->dev;
